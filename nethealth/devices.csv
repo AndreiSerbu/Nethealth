@@ -1,0 +1,6 @@
+Hostname;IP;OS;Role 
+MikroTik;10.0.0.10;MikroTik RouterOS;Router
+sl_nethealth;10.0.0.1;Ubuntu Server;Nethealth Server
+nGUIsw;10.0.0.2;Windows Server ;Potential ADDS, DNS, DHCP server and Domain Admin
+FreeBSD;10.0.0.4;FreeBSD;Potential Mail Server
+cl_01;10.0.0.5;Debian;Test Client
