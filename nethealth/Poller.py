@@ -82,12 +82,14 @@ with open(csv_file, "r") as csvfile:
         print("IP: ", line["IP"])
         response = ping(target=line["IP"], count=4, verbose=True, out_format=None)
         latency = response.rtt_avg_ms
-
+        
+        #Getting hostname
         host = snmp_get(
             line["IP"],
             oid=sysname_oid
         )
 
+        #Getting CPU load %
         rows = snmp_walk(line["IP"], hrProcessorLoad)    
         loads = []
         if rows:
@@ -99,43 +101,43 @@ with open(csv_file, "r") as csvfile:
                 cpu_avg = sum(loads) / len(loads)
             print("CPU avg:", cpu_avg, "%")
         
-
+        #Getting ramIndex from hrStorageType
         rows = snmp_walk(line["IP"], hrStorageType)    
-        loads = []
         if rows:
             for row in rows:
                 if row[1] == hrStorageRam:
                     ramIndex = row[0].split(".")[-1]
         
+        #Getting allocation units value to calculate RAM values into bytes
         allocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + ramIndex)
 
+        #Getting total RAM
         ramSize = snmp_get(line["IP"], oid = hrStorageSize + "." + ramIndex)
         ramSize = int(ramSize) * int(allocationUnits)
         ramSizeMB = round(ramSize / (1024 ** 2), 2)
         ramSizeGB = round(ramSize / (1024 ** 3), 2)
         print("RAM Size: ", ramSizeMB, "MB" ," or" ,ramSizeGB ,"GB")
 
+        #Getting total used RAM
         ramUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + ramIndex)
         ramUsage = int(ramUsage) * int(allocationUnits)
         ramUsageMB = round(ramUsage / (1024 ** 2), 2)
         ramUsageGB = round(ramUsage / (1024 ** 3), 2)
         print("RAM Usage: ", ramUsageMB, "MB" ," or" ,ramUsageGB ,"GB")
+        
+        #Getting RAM usage percent
+        ramUsagePercent = ramUsageGB / ramSizeGB * 100
+        ramUsagePercent = round(ramUsagePercent)
+        print(ramUsagePercent, "%")
 
-        #Add data to Database:
+        #Add data to DB:
         connection = sqlite3.connect(resultsDB)
         dbCursor = connection.cursor()
         dbCursor.execute(
             "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?)",
-                (ct, host, latency, "test", cpu_avg, "test")
+                (ct, host, latency, "test", cpu_avg, ramUsagePercent)
         )  
         connection.commit()
         print("\n")
         print("Waiting...")
         time.sleep(2.5)
-        
-
-#SNMP OIDs:
-#Hostname (SYSNAME_OID): 1.3.6.1.2.1.1.5.0
-#CPU load: 1.3.6.1.2.1.25.3.3.1.2
-#RAM Size: 1.3.6.1.2.1.25.2.3.1.5
-#RAM Used: 1.3.6.1.2.1.25.2.3.1.6 
