@@ -1,0 +1,1 @@
+Set-VMVideo -VMName CL-01 -HorizontalResolution:2240 -VerticalResolution:1400 -ResolutionType Single
