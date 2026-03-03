@@ -11,6 +11,7 @@ import sqlite3
 
 snmpCommunity = "snmp_read"
 sysname_oid = "1.3.6.1.2.1.1.5.0"
+sysUpTime = "1.3.6.1.2.1.1.3.0"
 hrProcessorLoad = "1.3.6.1.2.1.25.3.3.1.2"
 hrStorageType = "1.3.6.1.2.1.25.2.3.1.2"
 hrStorageRam = "1.3.6.1.2.1.25.2.1.2"
@@ -68,12 +69,16 @@ def snmp_walk(ip: str, base_oid: str, port: int = 161, timeout: int = 3, retries
 
 latency = 0
 cpu_avg = 0
-fixedDiskTotalGB = 0
-fixedDiskTotalUsedGB = 0
+ramIndex = None
+diskIndex = None
 
 #File path variables:
 resultsDB = r"C:\Projects\Network_Health\nethealth\results.db"
 csv_file = r"C:\Projects\Network_Health\nethealth\devices_simple.csv"
+
+#sqlite connection
+connection = sqlite3.connect(resultsDB)
+dbCursor = connection.cursor()
 
 #Main loop:
 main = 1
@@ -86,7 +91,22 @@ with open(csv_file, "r") as csvfile:
         print("IP: ", line["IP"])
         response = ping(target=line["IP"], count=4, verbose=True, out_format=None)
         latency = response.rtt_avg_ms
-        
+
+        #Getting upTime
+        upTime = snmp_get(
+            line["IP"],
+            oid = sysUpTime
+        )
+        upTimeSecondsTotal = int(upTime) / 100
+        upTimeSecondsTotal = round(upTimeSecondsTotal)
+        #upTimeSeconds = upTimeSecondsTotal % 60
+        #upTimeMinutesTotal = upTimeSecondsTotal // 60
+        #upTimeMinutes = upTimeMinutesTotal % 60
+        #upTimeHoursTotal = upTimeMinutesTotal // 60
+        #upTimeHours = upTimeHoursTotal % 60
+        #upTimeDays = upTimeHoursTotal // 24
+
+
         #Getting hostname
         host = snmp_get(
             line["IP"],
@@ -105,76 +125,78 @@ with open(csv_file, "r") as csvfile:
                 cpu_avg = sum(loads) / len(loads)
             print("CPU avg:", cpu_avg, "%")
         
-        #Getting ramIndex from hrStorageType
+        #Getting ramIndex and diskIndex
         rows = snmp_walk(line["IP"], hrStorageType)    
         if rows:
             for row in rows:
                 if row[1] == hrStorageRam:
                     ramIndex = row[0].split(".")[-1]
-        
-        #Getting allocation units value to calculate RAM values into bytes
-        ramAllocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + ramIndex)
-
-        #Getting total RAM
-        ramSize = snmp_get(line["IP"], oid = hrStorageSize + "." + ramIndex)
-        ramSize = int(ramSize) * int(ramAllocationUnits)
-        ramSizeMB = round(ramSize / (1024 ** 2), 2)
-        ramSizeGB = round(ramSize / (1024 ** 3), 2)
-        print("RAM Size: ", ramSizeMB, "MB" ," or" ,ramSizeGB ,"GB")
-
-        #Getting total used RAM
-        ramUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + ramIndex)
-        ramUsage = int(ramUsage) * int(ramAllocationUnits)
-        ramUsageMB = round(ramUsage / (1024 ** 2), 2)
-        ramUsageGB = round(ramUsage / (1024 ** 3), 2)
-        print("RAM Usage: ", ramUsageMB, "MB" ," or" ,ramUsageGB ,"GB")
-        
-        #Getting RAM usage percent
-        ramUsagePercent = ramUsageGB / ramSizeGB * 100
-        ramUsagePercent = round(ramUsagePercent)
-        print(ramUsagePercent, "%")
-
-        #hrStorageFixedDisk
-        rows = snmp_walk(line["IP"], hrStorageType)    
-        if rows:
-            for row in rows:
                 if row[1] == hrStorageFixedDisk:
                     diskIndex = row[0].split(".")[-1]
-                    
-                    fixedDiskAllocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + diskIndex)
-                    
-                    storageDescr = snmp_get(line["IP"], oid = hrStorageDescr + "." + diskIndex) 
-                    print(storageDescr)
+        if ramIndex:
+            #Getting allocation units value to calculate RAM values into bytes
+            ramAllocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + ramIndex)
 
-                    #Getting total size of each disk
-                    fixedDiskSize = snmp_get(line["IP"], oid = hrStorageSize + "." + diskIndex)
-                    fixedDiskSize = int(fixedDiskSize) * int(fixedDiskAllocationUnits)
-                    fixedDiskMB = round(fixedDiskSize / (1024 ** 2), 2)
-                    fixedDiskGB = round(fixedDiskSize / (1024 ** 3), 2)
-                    print("Disk size: ", fixedDiskMB, "MB" ," or" , fixedDiskGB,"GB")
+            #Getting total RAM
+            ramSize = snmp_get(line["IP"], oid = hrStorageSize + "." + ramIndex)
+            ramSize = int(ramSize) * int(ramAllocationUnits)
+            ramSizeMB = round(ramSize / (1024 ** 2), 2)
+            ramSizeGB = round(ramSize / (1024 ** 3), 2)
+            print("RAM Size: ", ramSizeMB, "MB" ," or" ,ramSizeGB ,"GB")
 
-                    #Getting used size of each disk
-                    fixedDiskUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + diskIndex)
-                    fixedDiskUsage = int(fixedDiskUsage) * int(fixedDiskAllocationUnits)
-                    fixedDiskUsageMB = round(fixedDiskUsage / (1024 ** 2), 2)
-                    fixedDiskUsageGB = round(fixedDiskUsage / (1024 ** 3), 2)
-                    print("Disk used: ", fixedDiskUsageMB, "MB" ," or" , fixedDiskUsageGB,"GB")
+            #Getting total used RAM
+            ramUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + ramIndex)
+            ramUsage = int(ramUsage) * int(ramAllocationUnits)
+            ramUsageMB = round(ramUsage / (1024 ** 2), 2)
+            ramUsageGB = round(ramUsage / (1024 ** 3), 2)
+            print("RAM Usage: ", ramUsageMB, "MB" ," or" ,ramUsageGB ,"GB")
+            
+            #Getting RAM usage percent
+            ramUsagePercent = ramUsageGB / ramSizeGB * 100
+            ramUsagePercent = round(ramUsagePercent)
+            print(ramUsagePercent, "%")
 
-                    if fixedDiskGB > 1:
-                        fixedDiskTotalGB = fixedDiskTotalGB + fixedDiskGB
-                        print(fixedDiskTotalGB)
-                        fixedDiskTotalUsedGB = fixedDiskTotalUsedGB + fixedDiskUsageGB
-                        fixedDiskUsagePercent = fixedDiskUsageGB / fixedDiskGB * 100
-                        fixedDiskUsagePercent = round(fixedDiskUsagePercent, 2)
-                        print(fixedDiskUsagePercent)
-                    
+        #hrStorageFixedDisk
+        if diskIndex:
+            for row in rows:
+                #initialising variables
+                fixedDiskTotalGB = 0
+                fixedDiskTotalUsedGB = 0
+
+                diskIndex = row[0].split(".")[-1]
+                
+                fixedDiskAllocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + diskIndex)
+                
+                storageDescr = snmp_get(line["IP"], oid = hrStorageDescr + "." + diskIndex) 
+                print(storageDescr)
+
+                #Getting total size of each disk
+                fixedDiskSize = snmp_get(line["IP"], oid = hrStorageSize + "." + diskIndex)
+                fixedDiskSize = int(fixedDiskSize) * int(fixedDiskAllocationUnits)
+                fixedDiskMB = round(fixedDiskSize / (1024 ** 2), 2)
+                fixedDiskGB = round(fixedDiskSize / (1024 ** 3), 2)
+                print("Disk size: ", fixedDiskMB, "MB" ," or" , fixedDiskGB,"GB")
+
+                #Getting used size of each disk
+                fixedDiskUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + diskIndex)
+                fixedDiskUsage = int(fixedDiskUsage) * int(fixedDiskAllocationUnits)
+                fixedDiskUsageMB = round(fixedDiskUsage / (1024 ** 2), 2)
+                fixedDiskUsageGB = round(fixedDiskUsage / (1024 ** 3), 2)
+                print("Disk used: ", fixedDiskUsageMB, "MB" ," or" , fixedDiskUsageGB,"GB")
+
+                if fixedDiskGB > 1:
+                    fixedDiskTotalGB = fixedDiskTotalGB + fixedDiskGB
+                    print(fixedDiskTotalGB)
+                    fixedDiskTotalUsedGB = fixedDiskTotalUsedGB + fixedDiskUsageGB
+                    fixedDiskUsagePercent = fixedDiskUsageGB / fixedDiskGB * 100
+                    fixedDiskUsagePercent = round(fixedDiskUsagePercent, 2)
+                    print(fixedDiskUsagePercent)
+                
 
         #Add data to DB:
-        connection = sqlite3.connect(resultsDB)
-        dbCursor = connection.cursor()
         dbCursor.execute(
-            "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (ct, host, latency, "test", cpu_avg, ramUsagePercent, fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB)
+            "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (ct, host, latency, cpu_avg, ramUsagePercent, fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB, ramSizeGB, ramUsageGB, upTimeSecondsTotal)
         )
         connection.commit()
         print("\n")
