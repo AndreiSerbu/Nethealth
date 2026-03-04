@@ -189,6 +189,7 @@ with open(csv_file, "r") as csvfile:
                         loads.append(int(value))
                     if loads:
                         cpu_avg = sum(loads) / len(loads)
+                        cpu_avg = round(cpu_avg, 2)
                     print("CPU avg:", cpu_avg, "%")
                     print("\n")
                 
