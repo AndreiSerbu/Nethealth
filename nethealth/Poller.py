@@ -67,6 +67,68 @@ def snmp_walk(ip: str, base_oid: str, port: int = 161, timeout: int = 3, retries
 
     return results
 
+#Gets RAM values (in GB and % used)
+def ramSNMP(ip: str, ramIndex) -> Optional[Tuple[int, int]]:
+            if ramIndex:
+                #Getting allocation units value to calculate RAM values into bytes
+                ramAllocationUnits = snmp_get(ip, oid = hrStorageAllocationUnits + "." + ramIndex)
+
+                #Getting total RAM
+                ramSize = snmp_get(ip, oid = hrStorageSize + "." + ramIndex)
+                ramSize = int(ramSize) * int(ramAllocationUnits)
+                ramSizeMB = round(ramSize / (1024 ** 2), 2)
+                ramSizeGB = round(ramSize / (1024 ** 3), 2)
+                print("RAM Size: ", ramSizeMB, "MB" ," or" ,ramSizeGB ,"GB")
+
+                #Getting total used RAM
+                ramUsage = snmp_get(ip, oid = hrStorageUsed + "." + ramIndex)
+                ramUsage = int(ramUsage) * int(ramAllocationUnits)
+                ramUsageMB = round(ramUsage / (1024 ** 2), 2)
+                ramUsageGB = round(ramUsage / (1024 ** 3), 2)
+                print("RAM Usage: ", ramUsageMB, "MB" ," or" ,ramUsageGB ,"GB")
+                
+                #Getting RAM usage percent
+                ramUsagePercent = ramUsageGB / ramSizeGB * 100
+                ramUsagePercent = round(ramUsagePercent)
+                print("Usage: ",ramUsagePercent, "%")
+                print("\n")
+            return ramUsagePercent, ramUsageGB, ramSizeGB
+
+#Gets fixedDisk values (Storage in GB and % used)
+def diskSNMP(ip: str, diskIndex) -> Optional[Tuple[int, int]]:
+    if rows:
+        for row in rows:
+            if row[1] == hrStorageFixedDisk:
+                diskIndex = row[0].split(".")[-1]
+                fixedDiskAllocationUnits = snmp_get(ip, oid = hrStorageAllocationUnits + "." + diskIndex)
+                storageDescr = snmp_get(ip, oid = hrStorageDescr + "." + diskIndex) 
+                print("Disk: ",storageDescr)
+                #Getting total size of each disk
+                fixedDiskSize = snmp_get(ip, oid = hrStorageSize + "." + diskIndex)
+                fixedDiskSize = int(fixedDiskSize) * int(fixedDiskAllocationUnits)
+                fixedDiskMB = round(fixedDiskSize / (1024 ** 2), 2)
+                fixedDiskGB = round(fixedDiskSize / (1024 ** 3), 2)
+                print("Disk size: ", fixedDiskMB, "MB" ," or" , fixedDiskGB,"GB")
+
+                #Getting used size of each disk
+                fixedDiskUsage = snmp_get(ip, oid = hrStorageUsed + "." + diskIndex)
+                fixedDiskUsage = int(fixedDiskUsage) * int(fixedDiskAllocationUnits)
+                fixedDiskUsageMB = round(fixedDiskUsage / (1024 ** 2), 2)
+                fixedDiskUsageGB = round(fixedDiskUsage / (1024 ** 3), 2)
+                print("Disk used: ", fixedDiskUsageMB, "MB" ," or" , fixedDiskUsageGB,"GB")
+
+                if fixedDiskGB > 1:
+                    fixedDiskTotalGB = 0
+                    fixedDiskTotalGB = fixedDiskTotalGB + fixedDiskGB
+                    print("Total GB:", fixedDiskTotalGB)
+                    fixedDiskTotalUsedGB = 0
+                    fixedDiskTotalUsedGB = fixedDiskTotalUsedGB + fixedDiskUsageGB
+                    fixedDiskUsagePercent = fixedDiskUsageGB / fixedDiskGB * 100
+                    fixedDiskUsagePercent = round(fixedDiskUsagePercent, 2)
+                    print("Used :", fixedDiskUsagePercent,"%")
+                print("\n")
+    return fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB
+
 latency = 0
 cpu_avg = 0
 ramIndex = None
@@ -87,10 +149,11 @@ with open(csv_file, "r") as csvfile:
     reader = csv.DictReader(csvfile, dialect="excel", delimiter=";", quotechar='"')
     for line in reader:
         ct = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print("Time:", ct)
-        print("IP: ", line["IP"])
+        print("Timestamp:", ct)
+        print("IP: ", line["IP"], "\n")
         response = ping(target=line["IP"], count=4, verbose=True, out_format=None)
         latency = response.rtt_avg_ms
+        print("\n")
 
         #Getting upTime
         upTime = snmp_get(
@@ -124,6 +187,7 @@ with open(csv_file, "r") as csvfile:
             if loads:
                 cpu_avg = sum(loads) / len(loads)
             print("CPU avg:", cpu_avg, "%")
+            print("\n")
         
         #Getting ramIndex and diskIndex
         rows = snmp_walk(line["IP"], hrStorageType)    
@@ -131,67 +195,12 @@ with open(csv_file, "r") as csvfile:
             for row in rows:
                 if row[1] == hrStorageRam:
                     ramIndex = row[0].split(".")[-1]
-                if row[1] == hrStorageFixedDisk:
-                    diskIndex = row[0].split(".")[-1]
-        if ramIndex:
-            #Getting allocation units value to calculate RAM values into bytes
-            ramAllocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + ramIndex)
 
-            #Getting total RAM
-            ramSize = snmp_get(line["IP"], oid = hrStorageSize + "." + ramIndex)
-            ramSize = int(ramSize) * int(ramAllocationUnits)
-            ramSizeMB = round(ramSize / (1024 ** 2), 2)
-            ramSizeGB = round(ramSize / (1024 ** 3), 2)
-            print("RAM Size: ", ramSizeMB, "MB" ," or" ,ramSizeGB ,"GB")
+        #Getting RAM data
+        ramUsagePercent, ramUsageGB, ramSizeGB = ramSNMP(line["IP"], ramIndex)
 
-            #Getting total used RAM
-            ramUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + ramIndex)
-            ramUsage = int(ramUsage) * int(ramAllocationUnits)
-            ramUsageMB = round(ramUsage / (1024 ** 2), 2)
-            ramUsageGB = round(ramUsage / (1024 ** 3), 2)
-            print("RAM Usage: ", ramUsageMB, "MB" ," or" ,ramUsageGB ,"GB")
-            
-            #Getting RAM usage percent
-            ramUsagePercent = ramUsageGB / ramSizeGB * 100
-            ramUsagePercent = round(ramUsagePercent)
-            print(ramUsagePercent, "%")
-
-        #hrStorageFixedDisk
-        if diskIndex:
-            for row in rows:
-                #initialising variables
-                fixedDiskTotalGB = 0
-                fixedDiskTotalUsedGB = 0
-
-                diskIndex = row[0].split(".")[-1]
-                
-                fixedDiskAllocationUnits = snmp_get(line["IP"], oid = hrStorageAllocationUnits + "." + diskIndex)
-                
-                storageDescr = snmp_get(line["IP"], oid = hrStorageDescr + "." + diskIndex) 
-                print(storageDescr)
-
-                #Getting total size of each disk
-                fixedDiskSize = snmp_get(line["IP"], oid = hrStorageSize + "." + diskIndex)
-                fixedDiskSize = int(fixedDiskSize) * int(fixedDiskAllocationUnits)
-                fixedDiskMB = round(fixedDiskSize / (1024 ** 2), 2)
-                fixedDiskGB = round(fixedDiskSize / (1024 ** 3), 2)
-                print("Disk size: ", fixedDiskMB, "MB" ," or" , fixedDiskGB,"GB")
-
-                #Getting used size of each disk
-                fixedDiskUsage = snmp_get(line["IP"], oid = hrStorageUsed + "." + diskIndex)
-                fixedDiskUsage = int(fixedDiskUsage) * int(fixedDiskAllocationUnits)
-                fixedDiskUsageMB = round(fixedDiskUsage / (1024 ** 2), 2)
-                fixedDiskUsageGB = round(fixedDiskUsage / (1024 ** 3), 2)
-                print("Disk used: ", fixedDiskUsageMB, "MB" ," or" , fixedDiskUsageGB,"GB")
-
-                if fixedDiskGB > 1:
-                    fixedDiskTotalGB = fixedDiskTotalGB + fixedDiskGB
-                    print(fixedDiskTotalGB)
-                    fixedDiskTotalUsedGB = fixedDiskTotalUsedGB + fixedDiskUsageGB
-                    fixedDiskUsagePercent = fixedDiskUsageGB / fixedDiskGB * 100
-                    fixedDiskUsagePercent = round(fixedDiskUsagePercent, 2)
-                    print(fixedDiskUsagePercent)
-                
+        #Getting Hard Disk Data
+        fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB = diskSNMP(line["IP"], diskIndex)
 
         #Add data to DB:
         dbCursor.execute(
