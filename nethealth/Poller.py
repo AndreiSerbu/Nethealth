@@ -133,6 +133,7 @@ latency = 0
 cpu_avg = 0
 ramIndex = None
 diskIndex = None
+upTime = None
 
 #File path variables:
 resultsDB = r"C:\Projects\Network_Health\nethealth\results.db"
@@ -153,63 +154,65 @@ with open(csv_file, "r") as csvfile:
         print("IP: ", line["IP"], "\n")
         response = ping(target=line["IP"], count=4, verbose=True, out_format=None)
         latency = response.rtt_avg_ms
+        print(latency)
         print("\n")
-
-        #Getting upTime
-        upTime = snmp_get(
-            line["IP"],
-            oid = sysUpTime
-        )
-        upTimeSecondsTotal = int(upTime) / 100
-        upTimeSecondsTotal = round(upTimeSecondsTotal)
-        #upTimeSeconds = upTimeSecondsTotal % 60
-        #upTimeMinutesTotal = upTimeSecondsTotal // 60
-        #upTimeMinutes = upTimeMinutesTotal % 60
-        #upTimeHoursTotal = upTimeMinutesTotal // 60
-        #upTimeHours = upTimeHoursTotal % 60
-        #upTimeDays = upTimeHoursTotal // 24
-
-
-        #Getting hostname
-        host = snmp_get(
-            line["IP"],
-            oid=sysname_oid
-        )
-
-        #Getting CPU load %
-        rows = snmp_walk(line["IP"], hrProcessorLoad)    
-        loads = []
-        if rows:
-            for row in rows:
-                oid = row[0]
-                value = row[1]
-                loads.append(int(value))
-            if loads:
-                cpu_avg = sum(loads) / len(loads)
-            print("CPU avg:", cpu_avg, "%")
-            print("\n")
-        
-        #Getting ramIndex and diskIndex
-        rows = snmp_walk(line["IP"], hrStorageType)    
-        if rows:
-            for row in rows:
-                if row[1] == hrStorageRam:
-                    ramIndex = row[0].split(".")[-1]
-
-        #Getting RAM data
-        ramUsagePercent, ramUsageGB, ramSizeGB = ramSNMP(line["IP"], ramIndex)
-
-        #Getting Hard Disk Data
-        fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB = diskSNMP(line["IP"], diskIndex)
-
-        #Add data to DB:
-        dbCursor.execute(
-            "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (ct, host, latency, cpu_avg, ramUsagePercent, fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB, ramSizeGB, ramUsageGB, upTimeSecondsTotal)
-        )
-        connection.commit()
-        print("\n")
+        if latency < 1500:
+            #Getting upTime
+            upTime = snmp_get(
+                line["IP"],
+                oid = sysUpTime
+            )
+            if upTime != None:
+                upTimeSecondsTotal = int(upTime) / 100
+                upTimeSecondsTotal = round(upTimeSecondsTotal)
+                #upTimeSeconds = upTimeSecondsTotal % 60
+                #upTimeMinutesTotal = upTimeSecondsTotal // 60
+                #upTimeMinutes = upTimeMinutesTotal % 60
+                #upTimeHoursTotal = upTimeMinutesTotal // 60
+                #upTimeHours = upTimeHoursTotal % 60
+                #upTimeDays = upTimeHoursTotal // 24
 
 
-        print("Waiting...")
-        time.sleep(2.5)
+                #Getting hostname
+                host = snmp_get(
+                    line["IP"],
+                    oid=sysname_oid
+                )
+
+                #Getting CPU load %
+                rows = snmp_walk(line["IP"], hrProcessorLoad)    
+                loads = []
+                if rows:
+                    for row in rows:
+                        oid = row[0]
+                        value = row[1]
+                        loads.append(int(value))
+                    if loads:
+                        cpu_avg = sum(loads) / len(loads)
+                    print("CPU avg:", cpu_avg, "%")
+                    print("\n")
+                
+                #Getting ramIndex and diskIndex
+                rows = snmp_walk(line["IP"], hrStorageType)    
+                if rows:
+                    for row in rows:
+                        if row[1] == hrStorageRam:
+                            ramIndex = row[0].split(".")[-1]
+
+                #Getting RAM data
+                ramUsagePercent, ramUsageGB, ramSizeGB = ramSNMP(line["IP"], ramIndex)
+
+                #Getting Hard Disk Data
+                fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB = diskSNMP(line["IP"], diskIndex)
+
+                #Add data to DB:
+                dbCursor.execute(
+                    "INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (ct, host, latency, cpu_avg, ramUsagePercent, fixedDiskUsagePercent, fixedDiskTotalGB, fixedDiskTotalUsedGB, ramSizeGB, ramUsageGB, upTimeSecondsTotal)
+                )
+                connection.commit()
+                print("\n")
+
+
+            #print("Waiting...")
+            #time.sleep(2.5)

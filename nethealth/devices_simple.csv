@@ -1,2 +1,4 @@
 Hostname;IP;OS;Role
 Debian;192.168.11.128;Debian;Test Client
+SW-01;192.168.11.2;Windows;Windows Server
+CW-01;192.168.11.15;Windows;Windows Client
